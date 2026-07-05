@@ -6,9 +6,14 @@ let socket = null;
 
 export const connectSocket = () => {
   if (!socket) {
+    const token = localStorage.getItem('token');
+    
     socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
+      auth: {
+        token: token
+      }
     });
 
     socket.on('connect', () => {
