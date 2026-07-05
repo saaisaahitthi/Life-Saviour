@@ -31,7 +31,27 @@ const estimateTime = (distanceKm) => {
   return Math.round(timeHours * 60);
 };
 
+/**
+ * Simple zone estimation based on coordinates
+ * (Fallback when emergency object lacks a zone)
+ */
+const calculateZone = (lat, lng) => {
+  if (!lat || !lng) return 'Central';
+  
+  // Using an arbitrary center point (Visakhapatnam) for this simple implementation
+  const centerLat = 17.731277;
+  const centerLng = 83.315077;
+  
+  if (lat > centerLat + 0.02) return 'North';
+  if (lat < centerLat - 0.02) return 'South';
+  if (lng > centerLng + 0.02) return 'East';
+  if (lng < centerLng - 0.02) return 'West';
+  
+  return 'Central';
+};
+
 module.exports = {
   calculateDistance,
-  estimateTime
+  estimateTime,
+  calculateZone
 };

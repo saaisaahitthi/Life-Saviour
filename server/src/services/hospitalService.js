@@ -13,6 +13,8 @@ const allocateHospital = async (emergency) => {
     
     if (!coordinates || !coordinates.lat) return null;
 
+    const derivedZone = zone || geoUtils.calculateZone(coordinates.lat, coordinates.lng);
+
     const requiredSpec = aiTriage.category; 
     
     let query = { status: 'active', 'capacity.emergencyBeds.available': { $gt: 0 } };
@@ -20,13 +22,13 @@ const allocateHospital = async (emergency) => {
     // Priority 1: Same Zone + Specialized
     let hospitals = await Hospital.find({
       ...query,
-      zone: zone || 'Central',
+      zone: derivedZone,
       specializations: requiredSpec
     });
 
     // Priority 2: Same Zone + Any
     if (hospitals.length === 0) {
-      hospitals = await Hospital.find({ ...query, zone: zone || 'Central' });
+      hospitals = await Hospital.find({ ...query, zone: derivedZone });
     }
 
     // Priority 3: Any Zone + Specialized
