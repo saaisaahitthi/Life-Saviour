@@ -163,7 +163,7 @@ const getChatResponse = async (history, message, context, language = 'en') => {
   }
 };
 
-const generateSummary = async (history, emergencyData = {}, wearableData = null) => {
+const generateSummary = async (history, emergencyData = {}, wearableData = null, timelineEvents = []) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return 'Summary unavailable.';
@@ -200,7 +200,13 @@ Triage Inputs:
 Additional Notes: ${emergencyData.additionalNotes || 'None'}
 ---` : '';
 
-    const prompt = `You are an expert emergency medical AI preparing a clinical handoff summary for the attending doctor.
+    const timelineSection = timelineEvents && timelineEvents.length > 0 ? `
+
+--- TIMELINE UPDATES ---
+${timelineEvents.map(e => `[${new Date(e.createdAt).toLocaleTimeString()}] ${e.title}: ${e.description}`).join('\n')}
+---` : '';
+
+    const prompt = `You are an expert emergency medical AI preparing a complete clinical handoff summary for the attending doctor.
 
 Please provide a concise, structured medical summary from all available data below.
 
@@ -209,8 +215,8 @@ Sections to cover:
 2. **Key Symptoms & Vital Signs**: From patient report and wearable device (if available)
 3. **Risk Flags**: Any critical values or red flags detected
 4. **Recommended Urgency**: Based on all data
-5. **Wearable Device Insights** (if wearable data present): Highlight any abnormal readings
-6. **Suggested Actions**: Immediate steps the doctor should take${emergencySection}${wearableSection}
+5. **Timeline Overview**: Key events since the emergency started
+6. **Suggested Actions**: Immediate steps the doctor should take${emergencySection}${wearableSection}${timelineSection}
 
 --- AI TRIAGE CONVERSATION ---
 ${history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join('\n')}`;

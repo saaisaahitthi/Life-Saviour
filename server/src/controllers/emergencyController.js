@@ -297,6 +297,9 @@ exports.assignDoctor = async (req, res) => {
         if (aiChat && aiChat.messages && aiChat.messages.length > 0) {
           // Pull wearable snapshot if stored in emergency record
           const wearableData = fullEmergency.wearableSnapshot || null;
+          // Pull timeline events
+          const timelineEvents = await timelineService.getEventsByEmergency(req.params.id);
+
           const emergencyData = {
             symptoms: fullEmergency.symptoms,
             severity: fullEmergency.severity,
@@ -307,13 +310,13 @@ exports.assignDoctor = async (req, res) => {
             triageInputs: fullEmergency.triageInputs,
             additionalNotes: fullEmergency.additionalNotes
           };
-          const summary = await aiChatService.generateSummary(aiChat.messages, emergencyData, wearableData);
+          const summary = await aiChatService.generateSummary(aiChat.messages, emergencyData, wearableData, timelineEvents);
           aiChat.summary = summary;
           await aiChat.save();
           await Emergency.findByIdAndUpdate(req.params.id, {
             'aiTriage.chatSummary': summary
           });
-          console.log('✅ AI Chat Summary (with wearable data) generated for doctor (background)');
+          console.log('✅ AI Chat Summary (with wearable data & timeline) generated for doctor (background)');
         }
       } catch (summaryErr) {
         console.error('⚠️ Could not generate AI chat summary:', summaryErr.message);
