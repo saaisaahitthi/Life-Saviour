@@ -25,6 +25,9 @@ const Login = () => {
       localStorage.setItem('role', data.user.role);
       localStorage.setItem('userId', data.user.id);
       localStorage.setItem('userName', data.user.name);
+      if (data.user.hospitalAffiliation) {
+        localStorage.setItem('userHospital', data.user.hospitalAffiliation);
+      }
       toast({ title: 'Welcome back!', status: 'success', duration: 3000, position: 'top-right' });
       navigate(`/dashboard/${data.user.role}`);
     } catch (err) {

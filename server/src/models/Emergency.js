@@ -69,6 +69,14 @@ const emergencySchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  pendingDriver: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  ignoredDrivers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   assignedHospital: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Hospital'

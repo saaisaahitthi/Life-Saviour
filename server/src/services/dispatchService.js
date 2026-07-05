@@ -28,11 +28,18 @@ const assignNearestAmbulance = async (io, emergencyId) => {
       return null;
     }
 
-    // Calculate distances and find nearest
+    // Calculate distances and find nearest available driver who hasn't ignored this yet
+    const validDrivers = drivers.filter(d => !emergency.ignoredDrivers.includes(d._id.toString()));
+    
+    if (validDrivers.length === 0) {
+      console.log('No valid drivers left to ping.');
+      return null;
+    }
+
     let nearestDriver = null;
     let minDistance = Infinity;
 
-    for (const driver of drivers) {
+    for (const driver of validDrivers) {
       const distance = geoUtils.calculateDistance(
         emergency.coordinates.lat,
         emergency.coordinates.lng,
@@ -49,40 +56,35 @@ const assignNearestAmbulance = async (io, emergencyId) => {
     if (nearestDriver) {
       const eta = geoUtils.estimateTime(minDistance);
 
-      // Update emergency with assigned driver
-      emergency.assignedDriver = nearestDriver._id;
-      emergency.status = 'assigned';
-      // Store ETA in a new field if needed, for now we just use it for the notification
+      // Update emergency with PENDING driver (do not mark as busy yet)
+      emergency.pendingDriver = nearestDriver._id;
       await emergency.save();
 
-      // Update driver status
-      nearestDriver.availabilityStatus = 'busy';
-      await nearestDriver.save();
-
-      // Notify Driver
-      await notificationService.createNotification(io, {
-        recipient: nearestDriver._id,
-        title: '🚨 NEW MISSION ASSIGNED',
-        message: `Emergency at ${emergency.location}. ETA: ${eta} mins.`,
-        type: 'ambulance_assigned',
-        referenceId: emergency._id,
-        referenceModel: 'Emergency',
-        priority: 'critical'
+      // Emit direct socket event to driver requesting acceptance
+      io.to(nearestDriver._id.toString()).emit('driver_requested', {
+        emergencyId: emergency._id,
+        location: emergency.location,
+        coordinates: emergency.coordinates,
+        eta: eta,
+        patientName: emergency.patientId.name
       });
 
-      // Notify Patient
-      await notificationService.createNotification(io, {
-        recipient: emergency.patientId._id,
-        title: '🚑 Ambulance Dispatched',
-        message: `Ambulance ${nearestDriver.vehicleNumber} is on the way. ETA: ${eta} mins.`,
-        type: 'ambulance_assigned',
-        referenceId: emergency._id,
-        referenceModel: 'Emergency',
-        priority: 'high'
-      });
-
-      // Emit update
-      io.emit('emergency_updated', await emergency.populate('assignedDriver', 'name vehicleNumber currentLocation'));
+      // Start 30-second timeout
+      setTimeout(async () => {
+        // Re-fetch emergency to check if they accepted
+        const checkEmergency = await Emergency.findById(emergency._id);
+        if (checkEmergency && checkEmergency.pendingDriver && checkEmergency.pendingDriver.toString() === nearestDriver._id.toString()) {
+          console.log(`Driver ${nearestDriver._id} ignored request. Moving to next.`);
+          // Remove pending, add to ignored
+          checkEmergency.pendingDriver = null;
+          checkEmergency.ignoredDrivers.push(nearestDriver._id);
+          await checkEmergency.save();
+          // Notify driver they missed it
+          io.to(nearestDriver._id.toString()).emit('driver_request_timeout', { emergencyId: emergency._id });
+          // Recursive call for next driver
+          module.exports.assignNearestAmbulance(io, emergency._id);
+        }
+      }, 30000);
 
       return nearestDriver;
     }

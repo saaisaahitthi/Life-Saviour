@@ -10,7 +10,8 @@ const {
   assignDriver,
   resolveEmergency,
   getActiveEmergencies,
-  getTimeline
+  getTimeline,
+  declineDispatch
 } = require('../controllers/emergencyController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -24,6 +25,7 @@ router.get('/:id', getEmergencyById);
 router.put('/:id', updateEmergency);
 router.put('/:id/assign-doctor', authorize('doctor'), assignDoctor);
 router.put('/:id/assign-driver', authorize('doctor', 'driver'), assignDriver);
+router.put('/:id/decline-driver', authorize('driver'), declineDispatch);
 router.put('/:id/resolve', authorize('doctor', 'driver'), resolveEmergency);
 router.get('/:id/timeline', getTimeline);
 

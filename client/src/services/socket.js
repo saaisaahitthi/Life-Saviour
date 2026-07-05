@@ -80,6 +80,11 @@ export const joinUserRoom = (userId) => {
   s.emit('join_user', userId);
 };
 
+export const joinHospitalRoom = (hospitalId) => {
+  const s = getSocket();
+  s.emit('join_hospital', hospitalId);
+};
+
 export const sendDriverLocation = (data) => {
   const s = getSocket();
   s.emit('driver_location_update', data);

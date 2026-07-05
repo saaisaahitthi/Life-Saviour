@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Box, VStack, HStack, Text, Button, Heading, SimpleGrid, Badge, Container, useToast, Flex, Spinner, Icon } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Button, Heading, SimpleGrid, Badge, Container, useToast, Flex, Spinner, Icon, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter } from '@chakra-ui/react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { FiNavigation, FiMessageCircle, FiMapPin, FiClock, FiCheckCircle, FiTruck } from 'react-icons/fi';
@@ -15,6 +15,7 @@ const DriverDashboard = () => {
   const [emergencies, setEmergencies] = useState([]);
   const [myMissions, setMyMissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [dispatchRequest, setDispatchRequest] = useState(null);
   const [currentCoords, setCurrentCoords] = useState({ lat: 17.731277, lng: 83.315077 }); // Fallback to Visakhapatnam center for testing
   const navigate = useNavigate();
   const toast = useToast();
@@ -30,9 +31,23 @@ const DriverDashboard = () => {
       const handleUpdate = () => fetchData();
       socket.on('new_emergency', handleUpdate);
       socket.on('emergency_updated', handleUpdate);
+      
+      const handleRequest = (data) => {
+        setDispatchRequest(data);
+      };
+      
+      const handleTimeout = (data) => {
+        setDispatchRequest(prev => (prev && prev.emergencyId === data.emergencyId) ? null : prev);
+      };
+
+      socket.on('driver_requested', handleRequest);
+      socket.on('driver_request_timeout', handleTimeout);
+
       return () => {
         socket.off('new_emergency', handleUpdate);
         socket.off('emergency_updated', handleUpdate);
+        socket.off('driver_requested', handleRequest);
+        socket.off('driver_request_timeout', handleTimeout);
       };
     }
   }, []);
@@ -49,9 +64,18 @@ const DriverDashboard = () => {
   const handleAcceptMission = async (id) => {
     try {
       await emergencyService.assignDriver(id);
+      setDispatchRequest(null);
       toast({ title: t('missionAccepted'), description: t('navigatePickup'), status: 'success', duration: 3000, position: 'top-right' });
       fetchData();
     } catch (err) { toast({ title: 'Error', description: err.response?.data?.message || 'Failed', status: 'error', duration: 3000, position: 'top-right' }); }
+  };
+
+  const handleDeclineMission = async (id) => {
+    try {
+      await emergencyService.declineDriver(id);
+      setDispatchRequest(null);
+      toast({ title: 'Declined', description: 'Dispatch request declined.', status: 'info', duration: 3000, position: 'top-right' });
+    } catch (err) { toast({ title: 'Error', status: 'error', duration: 3000 }); }
   };
 
   const handleStartNavigation = async (id) => {
@@ -310,6 +334,25 @@ const DriverDashboard = () => {
             {myMissions.filter(e => e.status === 'resolved').length === 0 && <Box bg="rgba(15,20,40,0.4)" borderRadius="16px" p={8} textAlign="center" border="1px solid rgba(255,255,255,0.04)"><Text color="whiteAlpha.400">{t('noCompletedTrips')}</Text></Box>}
           </VStack>
         </MotionBox>
+        {/* Dispatch Request Modal */}
+        <Modal isOpen={!!dispatchRequest} onClose={() => {}} closeOnOverlayClick={false}>
+          <ModalOverlay />
+          <ModalContent bg="#1a202c" color="white" border="1px solid rgba(229,62,62,0.3)">
+            <ModalHeader color="#e53e3e">🚨 New Emergency Dispatch</ModalHeader>
+            <ModalBody>
+              <VStack spacing={4} align="stretch">
+                <Text><b>Patient:</b> {dispatchRequest?.patientName}</Text>
+                <Text><b>Location:</b> {dispatchRequest?.location}</Text>
+                <Text><b>ETA:</b> {dispatchRequest?.eta} mins</Text>
+                <Text color="yellow.400" fontSize="sm">Please accept or decline within 30 seconds.</Text>
+              </VStack>
+            </ModalBody>
+            <ModalFooter>
+              <Button colorScheme="red" mr={3} onClick={() => handleDeclineMission(dispatchRequest?.emergencyId)}>Decline</Button>
+              <Button colorScheme="green" onClick={() => handleAcceptMission(dispatchRequest?.emergencyId)}>Accept Dispatch</Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
       </Container>
     </Box>
   );

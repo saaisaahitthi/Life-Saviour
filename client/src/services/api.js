@@ -49,6 +49,7 @@ export const emergencyService = {
   update: (id, data) => api.put(`/emergencies/${id}`, data),
   assignDoctor: (id) => api.put(`/emergencies/${id}/assign-doctor`),
   assignDriver: (id, driverId) => api.put(`/emergencies/${id}/assign-driver`, { driverId }),
+  declineDriver: (id) => api.put(`/emergencies/${id}/decline-driver`),
   resolve: (id, notes) => api.put(`/emergencies/${id}/resolve`, { resolutionNotes: notes }),
   getActive: () => api.get('/emergencies/active'),
   getTimeline: (id) => api.get(`/emergencies/${id}/timeline`),

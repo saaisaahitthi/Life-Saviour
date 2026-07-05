@@ -27,7 +27,7 @@ router.put('/override/:emergencyId', protect, async (req, res) => {
       { new: true }
     ).populate('assignedHospital');
 
-    if (req.io) req.io.emit('emergency_updated', emergency);
+    if (req.io) req.io.to(`emergency_${emergency._id}`).emit('emergency_updated', emergency);
     res.json(emergency);
   } catch (err) {
     res.status(500).json({ message: 'Override failed', error: err.message });

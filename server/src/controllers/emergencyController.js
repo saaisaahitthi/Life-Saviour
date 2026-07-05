@@ -98,9 +98,13 @@ exports.createEmergency = async (req, res) => {
       .populate('patientId', 'name email phone')
       .populate('assignedHospital');
 
-    // Emit to all connected doctors and drivers
+    // Emit to connected doctors in the assigned hospital room
     if (req.io) {
-      req.io.emit('new_emergency', populated);
+      if (populated.assignedHospital) {
+        req.io.to(`hospital_${populated.assignedHospital.name}`).emit('new_emergency', populated);
+      } else {
+        req.io.emit('new_emergency', populated); // Fallback
+      }
 
       // Create notifications for specialized active doctors
       const CATEGORY_TO_SPEC = {
@@ -230,9 +234,9 @@ exports.updateEmergency = async (req, res) => {
       return res.status(404).json({ message: 'Emergency not found' });
     }
 
-    // Emit update to all connected users
+    // Emit update to the specific emergency room
     if (req.io) {
-      req.io.emit('emergency_updated', emergency);
+      req.io.to(`emergency_${emergency._id}`).emit('emergency_updated', emergency);
     }
 
     res.json(emergency);
@@ -318,7 +322,7 @@ exports.assignDoctor = async (req, res) => {
 
     // Background: Emit socket events and notifications (non-blocking)
     if (req.io) {
-      req.io.emit('emergency_updated', populated);
+      req.io.to(`emergency_${emergency._id}`).emit('emergency_updated', populated);
 
       notificationService.createNotification(req.io, {
         recipient: emergency.patientId,
@@ -346,23 +350,42 @@ exports.assignDoctor = async (req, res) => {
 
 exports.assignDriver = async (req, res) => {
   try {
-    const { driverId } = req.body;
-    const emergency = await Emergency.findByIdAndUpdate(
-      req.params.id,
-      { assignedDriver: driverId || req.user._id, status: 'assigned' },
-      { new: true }
-    ).populate('patientId', 'name email phone')
-     .populate('assignedDoctor', 'name email specialization')
-     .populate('assignedDriver', 'name email vehicleNumber');
+    const emergency = await Emergency.findById(req.params.id);
+    if (!emergency) return res.status(404).json({ message: 'Emergency not found' });
+    
+    // Allow admin/doctor to forcefully assign, otherwise check pendingDriver
+    if (req.user.role === 'driver') {
+      if (emergency.assignedDriver) {
+        return res.status(400).json({ message: 'Emergency already has an assigned driver' });
+      }
+      if (!emergency.pendingDriver || emergency.pendingDriver.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'You are not the pending driver for this emergency.' });
+      }
+    }
+
+    const driverId = req.user.role === 'driver' ? req.user._id : (req.body.driverId || req.user._id);
+
+    emergency.assignedDriver = driverId;
+    emergency.pendingDriver = null; // Clear pending
+    emergency.status = 'assigned';
+    await emergency.save();
+
+    // Update driver status to busy
+    await User.findByIdAndUpdate(driverId, { availabilityStatus: 'busy' });
+
+    const populated = await Emergency.findById(req.params.id)
+      .populate('patientId', 'name email phone')
+      .populate('assignedDoctor', 'name email specialization')
+      .populate('assignedDriver', 'name email vehicleNumber');
 
     if (req.io) {
-      req.io.emit('emergency_updated', emergency);
+      req.io.to(`emergency_${emergency._id}`).emit('emergency_updated', populated);
 
       // Notify patient
       await notificationService.createNotification(req.io, {
-        recipient: emergency.patientId._id,
+        recipient: populated.patientId._id,
         title: '🚑 Ambulance Assigned',
-        message: 'An ambulance has been dispatched to your location.',
+        message: `Ambulance ${populated.assignedDriver?.vehicleNumber || ''} is on the way.`,
         type: 'ambulance_assigned',
         referenceId: emergency._id,
         referenceModel: 'Emergency',
@@ -374,14 +397,34 @@ exports.assignDriver = async (req, res) => {
         emergency._id,
         'assignment',
         'Ambulance Dispatched',
-        `Ambulance/Driver has been dispatched to the patient location.`,
-        { name: 'System', role: 'admin' }
+        `Ambulance/Driver ${populated.assignedDriver?.name || ''} accepted the dispatch.`,
+        { name: req.user.name, role: req.user.role }
       );
     }
 
-    res.json(emergency);
+    res.json(populated);
   } catch (error) {
     res.status(500).json({ message: 'Failed to assign driver', error: error.message });
+  }
+};
+
+exports.declineDispatch = async (req, res) => {
+  try {
+    const emergency = await Emergency.findById(req.params.id);
+    if (!emergency) return res.status(404).json({ message: 'Emergency not found' });
+
+    if (emergency.pendingDriver && emergency.pendingDriver.toString() === req.user._id.toString()) {
+      emergency.pendingDriver = null;
+      emergency.ignoredDrivers.push(req.user._id);
+      await emergency.save();
+
+      // Trigger next dispatch
+      dispatchService.assignNearestAmbulance(req.io, emergency._id);
+    }
+
+    res.json({ message: 'Dispatch declined successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to decline dispatch', error: error.message });
   }
 };
 
@@ -397,7 +440,7 @@ exports.resolveEmergency = async (req, res) => {
      .populate('assignedDriver', 'name email vehicleNumber');
 
     if (req.io) {
-      req.io.emit('emergency_updated', emergency);
+      req.io.to(`emergency_${emergency._id}`).emit('emergency_updated', emergency);
 
       // Create Timeline Event
       await timelineService.createEvent(

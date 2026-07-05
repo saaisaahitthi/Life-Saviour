@@ -12,7 +12,7 @@ import DynamicText from '../components/DynamicText';
 import SmartHospitalPanel from '../components/SmartHospitalPanel';
 import { useLanguage } from '../contexts/LanguageContext';
 import DocumentManager from '../components/DocumentManager';
-import { getSocket, joinEmergencyRoom, leaveEmergencyRoom } from '../services/socket';
+import { getSocket, joinEmergencyRoom, leaveEmergencyRoom, joinHospitalRoom } from '../services/socket';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -142,11 +142,15 @@ const DoctorDashboard = () => {
   const navigate = useNavigate();
   const toast = useToast();
   const userName = localStorage.getItem('userName') || 'Doctor';
+  const userHospital = localStorage.getItem('userHospital');
 
   useEffect(() => { 
     fetchData(); 
     const socket = getSocket();
     if (socket) {
+      if (userHospital) {
+        joinHospitalRoom(userHospital);
+      }
       const handleUpdate = (data) => {
         if (data && data.status === 'dropped_off') {
           // Check if it belongs to this doctor by checking the ID directly instead of state (prevents stale closure bug)

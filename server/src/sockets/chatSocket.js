@@ -11,6 +11,13 @@ module.exports = (io) => {
       console.log(`👤 User joined private room: ${userId}`);
     });
 
+    // Join hospital room for new emergency broadcasts
+    socket.on('join_hospital', (hospitalId) => {
+      const room = `hospital_${hospitalId}`;
+      socket.join(room);
+      console.log(`👤 Doctor socket ${socket.id} joined hospital room: ${room}`);
+    });
+
     // Join emergency room
     socket.on('join_emergency', (emergencyId) => {
       const room = `emergency_${emergencyId}`;
