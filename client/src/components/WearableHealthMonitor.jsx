@@ -63,6 +63,18 @@ const WearableHealthMonitor = ({ userId }) => {
   const [connectingDeviceId, setConnectingDeviceId] = useState(null);
   const [searching, setSearching] = useState(false);
   const [foundDevices, setFoundDevices] = useState([]);
+  const [lastDataReceived, setLastDataReceived] = useState(null);
+  const [timeSinceUpdate, setTimeSinceUpdate] = useState(0);
+
+  useEffect(() => {
+    let interval;
+    if (lastDataReceived) {
+      interval = setInterval(() => {
+        setTimeSinceUpdate(Math.floor((Date.now() - lastDataReceived) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [lastDataReceived]);
 
   // False Alarm Prevention
   const [criticalAlert, setCriticalAlert] = useState(false);
@@ -96,6 +108,7 @@ const WearableHealthMonitor = ({ userId }) => {
         }
       };
       setVitals(data);
+      setLastDataReceived(Date.now());
       localStorage.setItem('latestWearableVitals', JSON.stringify(data));
       
       setVitalHistory(prev => [...prev.slice(-20), {
@@ -226,6 +239,10 @@ const WearableHealthMonitor = ({ userId }) => {
           // Standard BLE Heart Rate format: First byte flags, second byte is HR if 8-bit
           const hr = value.getUint8(1);
           
+          // Validation: Reject impossible values
+          if (hr <= 0 || hr >= 255) return;
+          
+          setLastDataReceived(Date.now());
           setVitals(prev => {
             const newVitals = prev ? { ...prev, heartRate: hr } : {
               heartRate: hr,
@@ -249,6 +266,31 @@ const WearableHealthMonitor = ({ userId }) => {
         setConnectedDevice(connected);
         localStorage.setItem('connectedWearable', JSON.stringify(connected));
         toast({ title: t('deviceConnectedToast'), description: `Streaming live GATT data from ${device.name}`, status: 'success' });
+
+        device.gattDevice.addEventListener('gattserverdisconnected', async () => {
+          console.log('Bluetooth disconnected. Attempting auto-reconnect...');
+          setConnectedDevice(prev => prev ? { ...prev, disconnected: true } : null);
+          
+          let retries = 3;
+          let reconnected = false;
+          while (retries > 0 && !reconnected) {
+            try {
+              console.log(`Reconnection attempt ${4 - retries}...`);
+              await new Promise(res => setTimeout(res, 2000));
+              await device.gattDevice.gatt.connect();
+              reconnected = true;
+              setConnectedDevice(prev => prev ? { ...prev, disconnected: false } : null);
+              toast({ title: 'Reconnected', description: 'Wearable reconnected automatically', status: 'success' });
+            } catch (err) {
+              retries--;
+            }
+          }
+          if (!reconnected) {
+            handleDisconnect();
+            toast({ title: 'Connection Lost', description: 'Wearable disconnected. Please reconnect manually.', status: 'warning' });
+          }
+        });
+
       } catch (err) {
         console.error('GATT Connection Error:', err);
         toast({ title: 'GATT Connection Failed', description: err.message, status: 'error' });
@@ -300,7 +342,15 @@ const WearableHealthMonitor = ({ userId }) => {
           <Text fontSize="sm" color="whiteAlpha.500" fontWeight="700" textTransform="uppercase" letterSpacing="1px">
             {t('healthMonitor')}
           </Text>
-          {connectedDevice && <Badge colorScheme="green" fontSize="8px" variant="subtle">{t('live')}</Badge>}
+          {connectedDevice && (
+            connectedDevice.disconnected ? (
+              <Badge colorScheme="orange" fontSize="8px" variant="subtle">Reconnecting...</Badge>
+            ) : timeSinceUpdate > 30 ? (
+              <Badge colorScheme="red" fontSize="8px" variant="subtle">No Data Received</Badge>
+            ) : (
+              <Badge colorScheme="green" fontSize="8px" variant="subtle">Receiving Live Data</Badge>
+            )
+          )}
         </HStack>
         <HStack spacing={2}>
           <Badge colorScheme={deviceCount > 0 ? 'green' : 'gray'} variant="outline" fontSize="8px">
@@ -342,6 +392,14 @@ const WearableHealthMonitor = ({ userId }) => {
               </Badge>
             </HStack>
           </HStack>
+        </Box>
+      )}
+
+      {vitals && lastDataReceived && (
+        <Box mb={2} textAlign="right">
+          <Text fontSize="xs" color={timeSinceUpdate > 30 ? "red.400" : "whiteAlpha.500"} fontWeight="600">
+            {timeSinceUpdate > 30 ? 'No recent wearable data' : `Updated ${timeSinceUpdate} sec ago`}
+          </Text>
         </Box>
       )}
 
