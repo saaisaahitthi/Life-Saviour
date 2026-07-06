@@ -19,6 +19,7 @@ const heatmapRoutes = require('./src/routes/heatmapRoutes');
 const familyRoutes = require('./src/routes/familyRoutes');
 const hospitalRecommendRoutes = require('./src/routes/hospitalRecommendRoutes');
 const hospitalRoutes = require('./src/routes/hospitalRoutes');
+const callRoutes = require('./src/routes/callRoutes');
 
 // Import socket handler
 const chatSocket = require('./src/sockets/chatSocket');
@@ -64,6 +65,7 @@ app.use('/api/geo', heatmapRoutes);
 app.use('/api/family', familyRoutes);
 app.use('/api/hospital-recommend', hospitalRecommendRoutes);
 app.use('/api/hospitals', hospitalRoutes);
+app.use('/api/calls', callRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

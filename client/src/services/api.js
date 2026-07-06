@@ -89,4 +89,9 @@ export const analyticsService = {
   getHospitals: () => api.get('/analytics/hospitals'),
 };
 
+// Call Services
+export const callService = {
+  logCall: (data) => api.post('/calls', data)
+};
+
 export default api;

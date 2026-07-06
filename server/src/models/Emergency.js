@@ -125,7 +125,14 @@ const emergencySchema = new mongoose.Schema({
     stressLevel: Number,
     steps: Number,
     capturedAt: { type: Date, default: Date.now }
-  }
+  },
+  callLogs: [{
+    callerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    status: { type: String, enum: ['completed', 'missed', 'rejected'] },
+    duration: Number, // in seconds
+    timestamp: { type: Date, default: Date.now }
+  }]
 }, {
   timestamps: true
 });

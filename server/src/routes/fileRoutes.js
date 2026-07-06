@@ -1,24 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const path = require('path');
 const Emergency = require('../models/Emergency');
 const { protect } = require('../middleware/auth');
-
-// Multer config
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  }
-});
-
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
-});
+const upload = require('../middleware/upload');
 
 router.post('/upload/:emergencyId', protect, upload.single('file'), async (req, res) => {
   try {
@@ -38,7 +22,8 @@ router.post('/upload/:emergencyId', protect, upload.single('file'), async (req, 
     const attachment = {
       fileName: file.originalname,
       fileType: file.mimetype,
-      fileUrl: `/uploads/${file.filename}`,
+      fileUrl: file.path, // Cloudinary URL
+
       category: category || 'other',
       uploadedBy: req.user._id
     };

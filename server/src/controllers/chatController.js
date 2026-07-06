@@ -70,7 +70,7 @@ exports.uploadImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: 'No image uploaded' });
     }
-    const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const imageUrl = req.file.path; // Cloudinary URL
     res.status(200).json({ imageUrl });
   } catch (error) {
     res.status(500).json({ message: 'Failed to upload image', error: error.message });

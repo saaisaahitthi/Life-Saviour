@@ -137,6 +137,17 @@ module.exports = (io) => {
       }
     });
 
+    // Video Call status updates
+    socket.on('call_rejected', (data) => {
+      const { emergencyId } = data;
+      socket.to(`emergency_${emergencyId}`).emit('call_rejected', data);
+    });
+
+    socket.on('call_timeout', (data) => {
+      const { emergencyId } = data;
+      socket.to(`emergency_${emergencyId}`).emit('call_timeout', data);
+    });
+
     // Disconnect
     socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${socket.id}`);
