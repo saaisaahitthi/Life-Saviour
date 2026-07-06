@@ -58,7 +58,7 @@ const emergencySchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'assigned', 'in_progress', 'dropped_off', 'resolved', 'cancelled'],
+    enum: ['pending', 'assigned', 'in_progress', 'arrived', 'dropped_off', 'resolved', 'cancelled'],
     default: 'pending'
   },
   assignedDoctor: {

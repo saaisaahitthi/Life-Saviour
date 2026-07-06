@@ -21,6 +21,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import TransliterateInput from '../components/TransliterateInput';
 import FirstAidGuide from '../components/FirstAidGuide';
 import MedicalQrCode from '../components/MedicalQrCode';
+import { useOSRMRoute } from '../hooks/useOSRMRoute';
 
 // Fix leaflet default icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -213,10 +214,10 @@ const PatientDashboard = () => {
   const getSeverityColor = (s) => s === 'critical' ? 'red' : s === 'medium' ? 'orange' : 'green';
   const getStatusColor = (s) => s === 'resolved' ? 'green' : s === 'in_progress' ? 'blue' : s === 'assigned' ? 'orange' : s === 'cancelled' ? 'gray' : 'yellow';
 
-  const activeEmergency = emergencies.find(e => ['pending', 'assigned', 'in_progress'].includes(e.status));
+  const activeEmergency = emergencies.find(e => ['pending', 'assigned', 'in_progress', 'arrived'].includes(e.status));
 
   useEffect(() => {
-    if (activeEmergency && ['assigned', 'in_progress'].includes(activeEmergency.status)) {
+    if (activeEmergency && ['assigned', 'in_progress', 'arrived'].includes(activeEmergency.status)) {
       joinEmergencyRoom(activeEmergency._id);
       const socket = getSocket();
       
@@ -232,6 +233,19 @@ const PatientDashboard = () => {
       };
     }
   }, [activeEmergency]);
+
+  const driverCoord = driverLocation ? { lat: driverLocation[0], lng: driverLocation[1] } : null;
+  const patientCoord = activeEmergency?.coordinates;
+  const hospitalCoord = activeEmergency ? {
+    lat: activeEmergency.assignedHospital?.location?.coordinates?.lat || (patientCoord.lat + 0.02),
+    lng: activeEmergency.assignedHospital?.location?.coordinates?.lng || (patientCoord.lng + 0.02)
+  } : null;
+
+  const { coordinates: driverToPatientRoute, duration: driverToPatientDuration } = useOSRMRoute(
+    activeEmergency?.status === 'in_progress' ? driverCoord : null, 
+    activeEmergency?.status === 'in_progress' ? patientCoord : null
+  );
+  const { coordinates: patientToHospitalRoute, duration: patientToHospitalDuration } = useOSRMRoute(patientCoord, hospitalCoord);
 
   return (
     <Box minH="100vh" bg="#0a0e1a" pt="80px">
@@ -373,18 +387,34 @@ const PatientDashboard = () => {
                   <VStack spacing={2}><Box w={6} h={6} borderRadius="full" bg="green.400" display="flex" alignItems="center" justifyContent="center" border="4px solid #1a202c"><Box w={2} h={2} bg="white" borderRadius="full" /></Box><Text fontSize="xs" color="white" fontWeight="600">{t('requested')}</Text></VStack>
                   <VStack spacing={2}><Box w={6} h={6} borderRadius="full" bg={['assigned', 'in_progress'].includes(activeEmergency.status) ? 'green.400' : 'gray.600'} display="flex" alignItems="center" justifyContent="center" border="4px solid #1a202c">{['assigned', 'in_progress'].includes(activeEmergency.status) && <Box w={2} h={2} bg="white" borderRadius="full" />}</Box><Text fontSize="xs" color={['assigned', 'in_progress'].includes(activeEmergency.status) ? 'white' : 'whiteAlpha.400'} fontWeight="600">{t('assigned')}</Text></VStack>
                   <VStack spacing={2}><Box w={6} h={6} borderRadius="full" bg={activeEmergency.status === 'in_progress' ? 'blue.400' : 'gray.600'} display="flex" alignItems="center" justifyContent="center" border="4px solid #1a202c">{activeEmergency.status === 'in_progress' && <Box w={2} h={2} bg="white" borderRadius="full" />}</Box><Text fontSize="xs" color={activeEmergency.status === 'in_progress' ? 'white' : 'whiteAlpha.400'} fontWeight="600">{t('enRoute')}</Text></VStack>
+                  <VStack spacing={2}><Box w={6} h={6} borderRadius="full" bg={['arrived', 'dropped_off', 'resolved'].includes(activeEmergency.status) ? 'green.400' : 'gray.600'} display="flex" alignItems="center" justifyContent="center" border="4px solid #1a202c">{['arrived', 'dropped_off', 'resolved'].includes(activeEmergency.status) && <Box w={2} h={2} bg="white" borderRadius="full" />}</Box><Text fontSize="xs" color={['arrived', 'dropped_off', 'resolved'].includes(activeEmergency.status) ? 'white' : 'whiteAlpha.400'} fontWeight="600">Arrived</Text></VStack>
                 </Flex>
               </Box>
 
               {/* Live Tracking Map */}
-              {['assigned', 'in_progress'].includes(activeEmergency.status) && activeEmergency.coordinates?.lat && (
+              {['assigned', 'in_progress', 'arrived'].includes(activeEmergency.status) && activeEmergency.coordinates?.lat && (
                 <Box mt={6} mb={4} h="350px" borderRadius="16px" overflow="hidden" border="2px solid rgba(0,128,230,0.3)" boxShadow="0 0 20px rgba(0,128,230,0.15)" position="relative">
-                  {!driverLocation && (
+                  {!driverLocation && activeEmergency.status !== 'arrived' && (
                     <Box position="absolute" top="0" left="0" right="0" bg="rgba(0,0,0,0.7)" zIndex={1000} p={2} textAlign="center">
                       <Spinner size="sm" color="brand.400" mr={3} />
                       <Text as="span" color="white" fontSize="sm" fontWeight="600">
                         {t('waitingForAmbulanceGPS') === 'waitingForAmbulanceGPS' ? 'Connecting to Ambulance GPS...' : t('waitingForAmbulanceGPS')}
                       </Text>
+                    </Box>
+                  )}
+                  {(driverToPatientDuration || patientToHospitalDuration) && ['in_progress', 'arrived'].includes(activeEmergency.status) && (
+                    <Box position="absolute" top="10px" right="10px" bg="rgba(0,0,0,0.8)" zIndex={1000} p={3} borderRadius="12px" border="1px solid rgba(0,188,212,0.4)" backdropFilter="blur(10px)">
+                      <Text fontSize="xs" color="whiteAlpha.700" fontWeight="700" textTransform="uppercase">
+                        {activeEmergency.status === 'in_progress' ? 'Ambulance arriving in' : 'Hospital arrival in'}
+                      </Text>
+                      <HStack mt={1}>
+                        <FiClock color="#00bcd4" />
+                        <Text color="white" fontWeight="800" fontSize="lg">
+                          {activeEmergency.status === 'in_progress' 
+                            ? Math.ceil(driverToPatientDuration / 60) 
+                            : Math.ceil(patientToHospitalDuration / 60)} mins
+                        </Text>
+                      </HStack>
                     </Box>
                   )}
                   <MapContainer 
@@ -431,7 +461,13 @@ const PatientDashboard = () => {
                     })()}
 
                     {/* Route Line: Ambulance -> Patient */}
-                    {driverLocation && (
+                    {driverLocation && driverToPatientRoute ? (
+                      <Polyline 
+                        positions={driverToPatientRoute} 
+                        color="#0080e6" 
+                        weight={6} 
+                      />
+                    ) : driverLocation && (
                       <Polyline 
                         positions={[driverLocation, [activeEmergency.coordinates.lat, activeEmergency.coordinates.lng]]} 
                         color="#0080e6" 
@@ -441,7 +477,13 @@ const PatientDashboard = () => {
                     )}
 
                     {/* Route Line: Patient -> Hospital */}
-                    {(() => {
+                    {patientToHospitalRoute ? (
+                      <Polyline 
+                        positions={patientToHospitalRoute} 
+                        color="#38a169" 
+                        weight={6} 
+                      />
+                    ) : (() => {
                       const hLat = activeEmergency.assignedHospital?.location?.coordinates?.lat || (activeEmergency.coordinates.lat + 0.02);
                       const hLng = activeEmergency.assignedHospital?.location?.coordinates?.lng || (activeEmergency.coordinates.lng + 0.02);
                       return (

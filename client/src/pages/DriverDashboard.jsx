@@ -94,8 +94,16 @@ const DriverDashboard = () => {
     } catch (err) { toast({ title: 'Error', description: err.response?.data?.message || 'Failed to complete mission', status: 'error', duration: 3000, position: 'top-right' }); }
   };
 
+  const handlePatientArrived = async (id) => {
+    try {
+      await emergencyService.update(id, { status: 'arrived' });
+      toast({ title: 'Arrived', description: 'Arrived at patient location.', status: 'success', duration: 3000, position: 'top-right' });
+      fetchData();
+    } catch (err) { toast({ title: 'Error', description: err.response?.data?.message || 'Failed', status: 'error', duration: 3000, position: 'top-right' }); }
+  };
+
   const getSevColor = (s) => s === 'critical' ? '#e53e3e' : s === 'medium' ? '#d69e2e' : '#38a169';
-  const activeMission = myMissions.find(e => ['assigned', 'in_progress'].includes(e.status));
+  const activeMission = myMissions.find(e => ['assigned', 'in_progress', 'arrived'].includes(e.status));
 
   // Global Location Tracking for Dispatch
   useEffect(() => {
@@ -123,7 +131,7 @@ const DriverDashboard = () => {
 
   useEffect(() => {
     let intervalId;
-    if (activeMission && ['assigned', 'in_progress'].includes(activeMission.status)) {
+    if (activeMission && ['assigned', 'in_progress', 'arrived'].includes(activeMission.status)) {
       joinEmergencyRoom(activeMission._id);
       
       // Instantly send the last known global coordinates and repeat every 5 seconds
@@ -248,15 +256,8 @@ const DriverDashboard = () => {
                         const originParam = currentCoords ? `&origin=${currentCoords.lat},${currentCoords.lng}` : '';
                         let url = `https://www.google.com/maps/dir/?api=1${originParam}`;
                         
-                        if (activeMission.assignedHospital?.location?.coordinates) {
-                          url += `&waypoints=${activeMission.coordinates.lat},${activeMission.coordinates.lng}`;
-                          url += `&destination=${activeMission.assignedHospital.location.coordinates.lat},${activeMission.assignedHospital.location.coordinates.lng}`;
-                        } else if (activeMission.coordinates?.lat) {
-                          // Fallback destination (City General) roughly 2km away from patient for testing
-                          const fallbackLat = activeMission.coordinates.lat + 0.02;
-                          const fallbackLng = activeMission.coordinates.lng + 0.02;
-                          url += `&waypoints=${activeMission.coordinates.lat},${activeMission.coordinates.lng}`;
-                          url += `&destination=${fallbackLat},${fallbackLng}`;
+                        if (activeMission.coordinates?.lat) {
+                          url += `&destination=${activeMission.coordinates.lat},${activeMission.coordinates.lng}`;
                         } else {
                           url += `&destination=${encodeURIComponent(activeMission.location)}`;
                         }
@@ -265,9 +266,33 @@ const DriverDashboard = () => {
                       }}
                       _hover={{ bg: 'rgba(0,188,212,0.3)', transform: 'translateY(-2px)' }}
                     >
-                      {t('trackingLiveLocation')}
+                      {t('trackingLiveLocation') || 'Navigate to Patient'}
                     </Button>
-                    <Button size="md" bg="linear-gradient(135deg, #38a169 0%, #2f855a 100%)" color="white" borderRadius="12px" leftIcon={<FiCheckCircle />} onClick={() => handleResolveMission(activeMission._id)} _hover={{ transform: 'translateY(-2px)', boxShadow: '0 8px 25px rgba(56,161,105,0.4)' }}>{t('markArrived') || 'Mark Arrived & Complete'}</Button>
+                    <Button size="md" bg="linear-gradient(135deg, #d69e2e 0%, #b7791f 100%)" color="white" borderRadius="12px" leftIcon={<FiCheckCircle />} onClick={() => handlePatientArrived(activeMission._id)} _hover={{ transform: 'translateY(-2px)', boxShadow: '0 8px 25px rgba(214,158,46,0.4)' }}>Arrived at Patient</Button>
+                  </>
+                )}
+                {activeMission.status === 'arrived' && (
+                  <>
+                    <Button 
+                      size="md" 
+                      bg="rgba(0,188,212,0.2)" 
+                      color="teal.300" 
+                      borderRadius="12px" 
+                      leftIcon={<FiNavigation />}
+                      onClick={() => {
+                        const originParam = currentCoords ? `&origin=${currentCoords.lat},${currentCoords.lng}` : '';
+                        let url = `https://www.google.com/maps/dir/?api=1${originParam}`;
+                        
+                        if (activeMission.assignedHospital?.location?.coordinates) {
+                          url += `&destination=${activeMission.assignedHospital.location.coordinates.lat},${activeMission.assignedHospital.location.coordinates.lng}`;
+                        }
+                        window.open(url, '_blank');
+                      }}
+                      _hover={{ bg: 'rgba(0,188,212,0.3)', transform: 'translateY(-2px)' }}
+                    >
+                      Start Transport to Hospital
+                    </Button>
+                    <Button size="md" bg="linear-gradient(135deg, #38a169 0%, #2f855a 100%)" color="white" borderRadius="12px" leftIcon={<FiCheckCircle />} onClick={() => handleResolveMission(activeMission._id)} _hover={{ transform: 'translateY(-2px)', boxShadow: '0 8px 25px rgba(56,161,105,0.4)' }}>{t('markArrived') || 'Mark Dropped Off'}</Button>
                   </>
                 )}
                 <Button size="md" bg="rgba(229,62,62,0.15)" color="emergency.300" borderRadius="12px" leftIcon={<FiMessageCircle />} onClick={() => { localStorage.setItem('activeEmergencyId', activeMission._id); navigate('/chat'); }} _hover={{ bg: 'rgba(229,62,62,0.25)' }}>{t('emergencyChat')}</Button>

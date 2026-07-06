@@ -1,5 +1,18 @@
 const ChatMessage = require('../models/ChatMessage');
 const User = require('../models/User');
+const Emergency = require('../models/Emergency');
+
+// Haversine distance in km
+const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 module.exports = (io) => {
   io.on('connection', (socket) => {
@@ -88,10 +101,26 @@ module.exports = (io) => {
     });
 
     // Location update
-    socket.on('location_update', (data) => {
+    socket.on('location_update', async (data) => {
       const { emergencyId, lat, lng } = data;
       const room = `emergency_${emergencyId}`;
       socket.to(room).emit('location_update', { lat, lng });
+
+      // Geofencing Check
+      try {
+        const emergency = await Emergency.findById(emergencyId);
+        if (emergency && ['assigned', 'in_progress'].includes(emergency.status) && emergency.coordinates?.lat) {
+          const distKm = getDistanceFromLatLonInKm(lat, lng, emergency.coordinates.lat, emergency.coordinates.lng);
+          // 100 meters = 0.1 km
+          if (distKm <= 0.1) {
+            emergency.status = 'arrived';
+            await emergency.save();
+            io.to(room).emit('emergency_updated', emergency);
+          }
+        }
+      } catch (err) {
+        console.error('Geofencing error:', err);
+      }
     });
 
     // Wearable Vitals update

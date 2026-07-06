@@ -16,6 +16,7 @@ import { getSocket, joinEmergencyRoom, leaveEmergencyRoom, joinHospitalRoom } fr
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useOSRMRoute } from '../hooks/useOSRMRoute';
 
 // Fix leaflet default icons
 delete L.Icon.Default.prototype._getIconUrl;
@@ -87,10 +88,38 @@ const DoctorLiveMap = ({ emergency }) => {
     }
   }, [emergency]);
 
+  const driverCoord = driverLocation ? { lat: driverLocation[0], lng: driverLocation[1] } : null;
+  const patientCoord = emergency?.coordinates;
+  const hospitalCoord = emergency ? {
+    lat: emergency.assignedHospital?.location?.coordinates?.lat || (patientCoord.lat + 0.02),
+    lng: emergency.assignedHospital?.location?.coordinates?.lng || (patientCoord.lng + 0.02)
+  } : null;
+
+  const { coordinates: driverToPatientRoute, duration: driverToPatientDuration } = useOSRMRoute(
+    emergency?.status === 'in_progress' ? driverCoord : null, 
+    emergency?.status === 'in_progress' ? patientCoord : null
+  );
+  const { coordinates: patientToHospitalRoute, duration: patientToHospitalDuration } = useOSRMRoute(patientCoord, hospitalCoord);
+
   if (!emergency.coordinates?.lat) return null;
 
   return (
-    <Box mt={4} mb={4} h="250px" borderRadius="16px" overflow="hidden" border="1px solid rgba(0,128,230,0.3)">
+    <Box mt={4} mb={4} h="250px" borderRadius="16px" overflow="hidden" border="1px solid rgba(0,128,230,0.3)" position="relative">
+      {(driverToPatientDuration || patientToHospitalDuration) && ['in_progress', 'arrived'].includes(emergency.status) && (
+        <Box position="absolute" top="10px" right="10px" bg="rgba(0,0,0,0.8)" zIndex={1000} p={3} borderRadius="12px" border="1px solid rgba(0,188,212,0.4)" backdropFilter="blur(10px)">
+          <Text fontSize="xs" color="whiteAlpha.700" fontWeight="700" textTransform="uppercase">
+            {emergency.status === 'in_progress' ? 'Ambulance arriving in' : 'Hospital arrival in'}
+          </Text>
+          <HStack mt={1}>
+            <FiClock color="#00bcd4" />
+            <Text color="white" fontWeight="800" fontSize="lg">
+              {emergency.status === 'in_progress' 
+                ? Math.ceil(driverToPatientDuration / 60) 
+                : Math.ceil(patientToHospitalDuration / 60)} mins
+            </Text>
+          </HStack>
+        </Box>
+      )}
       <MapContainer center={[emergency.coordinates.lat, emergency.coordinates.lng]} zoom={14} style={{ height: '100%', width: '100%', zIndex: 0 }}>
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap' />
         
@@ -117,8 +146,15 @@ const DoctorLiveMap = ({ emergency }) => {
           return <Marker position={[hLat, hLng]} icon={hospitalIcon}><Popup>🏥 {hName}</Popup></Marker>;
         })()}
 
-        {driverLocation && <Polyline positions={[driverLocation, [emergency.coordinates.lat, emergency.coordinates.lng]]} color="#0080e6" weight={4} dashArray="8, 8" />}
-        {(() => {
+        {driverLocation && driverToPatientRoute ? (
+          <Polyline positions={driverToPatientRoute} color="#0080e6" weight={5} />
+        ) : driverLocation && (
+          <Polyline positions={[driverLocation, [emergency.coordinates.lat, emergency.coordinates.lng]]} color="#0080e6" weight={4} dashArray="8, 8" />
+        )}
+
+        {patientToHospitalRoute ? (
+          <Polyline positions={patientToHospitalRoute} color="#38a169" weight={5} />
+        ) : (() => {
           const hLat = emergency.assignedHospital?.location?.coordinates?.lat || (emergency.coordinates.lat + 0.02);
           const hLng = emergency.assignedHospital?.location?.coordinates?.lng || (emergency.coordinates.lng + 0.02);
           return <Polyline positions={[[emergency.coordinates.lat, emergency.coordinates.lng], [hLat, hLng]]} color="#38a169" weight={4} dashArray="8, 8" />;
