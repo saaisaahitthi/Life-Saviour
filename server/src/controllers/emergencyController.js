@@ -308,7 +308,8 @@ exports.assignDoctor = async (req, res) => {
             location: fullEmergency.location,
             transportType: fullEmergency.transportType,
             triageInputs: fullEmergency.triageInputs,
-            additionalNotes: fullEmergency.additionalNotes
+            additionalNotes: fullEmergency.additionalNotes,
+            aiTriage: fullEmergency.aiTriage
           };
           const summary = await aiChatService.generateSummary(aiChat.messages, emergencyData, wearableData, timelineEvents);
           aiChat.summary = summary;

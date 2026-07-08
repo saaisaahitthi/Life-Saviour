@@ -206,6 +206,16 @@ Additional Notes: ${emergencyData.additionalNotes || 'None'}
 ${timelineEvents.map(e => `[${new Date(e.createdAt).toLocaleTimeString()}] ${e.title}: ${e.description}`).join('\n')}
 ---` : '';
 
+    const aiTriageSection = emergencyData.aiTriage?.category ? `
+
+--- AI TRIAGE ANALYSIS ---
+Category: ${emergencyData.aiTriage.category}
+Priority: ${emergencyData.aiTriage.priorityLevel}
+Recommended Department: ${emergencyData.aiTriage.recommendedDepartment}
+Severity Score: ${emergencyData.aiTriage.severityScore}
+Summary: ${emergencyData.aiTriage.analysisSummary}
+---` : '';
+
     const prompt = `You are an expert emergency medical AI preparing a complete clinical handoff summary for the attending doctor.
 
 Please provide a concise, structured medical summary from all available data below.
@@ -216,7 +226,7 @@ Sections to cover:
 3. **Risk Flags**: Any critical values or red flags detected
 4. **Recommended Urgency**: Based on all data
 5. **Timeline Overview**: Key events since the emergency started
-6. **Suggested Actions**: Immediate steps the doctor should take${emergencySection}${wearableSection}${timelineSection}
+6. **Suggested Actions**: Immediate steps the doctor should take${emergencySection}${aiTriageSection}${wearableSection}${timelineSection}
 
 --- AI TRIAGE CONVERSATION ---
 ${history.map(h => `${h.role.toUpperCase()}: ${h.content}`).join('\n')}`;
