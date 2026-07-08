@@ -16,7 +16,7 @@ const createEvent = async (emergencyId, type, title, description, actor = null, 
 
     const io = getIo();
     if (io) {
-      io.to(emergencyId.toString()).emit('new_timeline_event', event);
+      io.to(`emergency_${emergencyId}`).emit('new_timeline_event', event);
     }
 
     return event;

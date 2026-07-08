@@ -7,6 +7,7 @@ const notificationService = require('../services/notificationService');
 const dispatchService = require('../services/dispatchService');
 const hospitalService = require('../services/hospitalService');
 const timelineService = require('../services/timelineService');
+const { TIMELINE_EVENT_TYPES, TIMELINE_TITLES } = require('../constants/timelineConstants');
 
 exports.createEmergency = async (req, res) => {
   try {
@@ -88,8 +89,8 @@ exports.createEmergency = async (req, res) => {
     // Create Timeline Event
     await timelineService.createEvent(
       emergency._id,
-      'status_change',
-      'Emergency Created',
+      TIMELINE_EVENT_TYPES.STATUS_CHANGE,
+      TIMELINE_TITLES.EMERGENCY_CREATED,
       `Emergency request initiated by ${patientName}. Severity: ${severity}.`,
       { name: patientName, role: 'patient' }
     );
@@ -340,8 +341,8 @@ exports.assignDoctor = async (req, res) => {
 
       timelineService.createEvent(
         emergency._id,
-        'assignment',
-        'Doctor Assigned',
+        TIMELINE_EVENT_TYPES.ASSIGNMENT,
+        TIMELINE_TITLES.DOCTOR_ASSIGNED,
         `Dr. ${req.user.name} has been assigned to the case.`,
         { name: req.user.name, role: 'doctor' }
       ).catch(err => console.error('Timeline error:', err));
@@ -399,8 +400,8 @@ exports.assignDriver = async (req, res) => {
       // Create Timeline Event
       await timelineService.createEvent(
         emergency._id,
-        'assignment',
-        'Ambulance Dispatched',
+        TIMELINE_EVENT_TYPES.ASSIGNMENT,
+        TIMELINE_TITLES.AMBULANCE_DISPATCHED,
         `Ambulance/Driver ${populated.assignedDriver?.name || ''} accepted the dispatch.`,
         { name: req.user.name, role: req.user.role }
       );
@@ -449,8 +450,8 @@ exports.resolveEmergency = async (req, res) => {
       // Create Timeline Event
       await timelineService.createEvent(
         emergency._id,
-        'status_change',
-        'Emergency Resolved',
+        TIMELINE_EVENT_TYPES.STATUS_CHANGE,
+        TIMELINE_TITLES.EMERGENCY_RESOLVED,
         `The emergency has been marked as resolved. Notes: ${resolutionNotes || 'None'}`,
         { name: req.user.name, role: 'doctor' }
       );
